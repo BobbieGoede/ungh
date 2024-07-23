@@ -1,43 +1,19 @@
-const HTML_LINK_RE = /(<img.*?src="(?<url>.*?)".*?>)/g;
-const HTML_LINK_NESTED_RE = /src="(?<url>.*?)"/g;
+import { gfm } from "micromark-extension-gfm";
+import { visit } from "unist-util-visit";
+import { toHtml } from "hast-util-to-html";
+import { fromHtml } from "hast-util-from-html";
+import { toMarkdown } from "mdast-util-to-markdown";
+import { fromMarkdown } from "mdast-util-from-markdown";
+import { gfmFromMarkdown, gfmToMarkdown } from "mdast-util-gfm";
 
-const MARKDOWN_LINK_RE = /(\[.*?]\((?<url>.*?)\))/g;
-const MARKDOWN_LINK_NESTED_RE = /\((?<url>.*?)\)/g;
+import type { Nodes, Element } from "hast";
 
 function alreadyURL(path: string) {
   return path.startsWith("http");
 }
 
-/**
- * Creates a string replacement function, prefixing matched strings with `baseURL`
- *
- * @param nested - Optional regular expression used to match nested paths.
- */
-function createReplacerFn(baseURL: string, nested?: RegExp) {
-  function resolveAbsoluteURL(path: string) {
-    return `${baseURL}/${path.replace(/^\.\//, "")}`;
-  }
-
-  return (match, path: string) => {
-    // If path is already a URL, return the match
-    if (alreadyURL(path)) {
-      return match;
-    }
-
-    // Replace nested link if nested RE is provided (to handle edge-case `[./relative-link](./relative-link)`)
-    if (nested) {
-      return match.replace(nested, (m, path: string) => {
-        // If path is already a URL, return the match
-        if (alreadyURL(path)) {
-          return m;
-        }
-
-        return m.replace(path, resolveAbsoluteURL(path));
-      });
-    }
-
-    return match.replace(path, resolveAbsoluteURL(path));
-  };
+function resolveAbsoluteURL(path: string, base: string) {
+  return `${base}/${path.replace(/^\.\//, "")}`;
 }
 
 /**
@@ -49,13 +25,50 @@ export function resolveMarkdownRelativeLinks(
   content: string,
   options: { cdnBaseURL: string; githubBaseURL: string },
 ) {
-  return content
-    .replace(
-      HTML_LINK_RE,
-      createReplacerFn(options.cdnBaseURL, HTML_LINK_NESTED_RE),
-    )
-    .replace(
-      MARKDOWN_LINK_RE,
-      createReplacerFn(options.githubBaseURL, MARKDOWN_LINK_NESTED_RE),
-    );
+  const tree = fromMarkdown(content, {
+    extensions: [gfm()],
+    mdastExtensions: [gfmFromMarkdown()],
+  });
+
+  visit(
+    tree,
+    (node) => node.type === "link" || node.type === "html",
+    (node) => {
+      // replace if url is relative
+      if (node.type === "link" && !alreadyURL(node.url)) {
+        node.url = resolveAbsoluteURL(node.url, options.githubBaseURL);
+      }
+
+      // parse html and traverse
+      if (node.type === "html") {
+        const htmlTree = fromHtml(node.value, { fragment: true });
+
+        visit(
+          htmlTree,
+
+          // filter for img tags with relative src
+          (n: Nodes) =>
+            n.type === "element" &&
+            n.tagName === "img" &&
+            typeof n.properties.src === "string" &&
+            !alreadyURL(n.properties.src),
+
+          // replace src with resolved url
+          (n: Element & { properties: { src: string } }) => {
+            n.properties.src = resolveAbsoluteURL(
+              n.properties.src,
+              options.cdnBaseURL,
+            );
+          },
+        );
+
+        node.value = toHtml(htmlTree);
+      }
+    },
+  );
+
+  const out = toMarkdown(tree, { extensions: [gfmToMarkdown()] });
+
+  // trim off added trailing newline (?)
+  return out.trim();
 }

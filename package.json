@@ -20,5 +20,14 @@
     "@vitest/coverage-v8": "^2.0.3",
     "vitest": "^2.0.3"
   },
+  "dependencies": {
+    "hast-util-from-html": "^2.0.1",
+    "hast-util-to-html": "^9.0.1",
+    "mdast-util-definitions": "^6.0.0",
+    "mdast-util-from-markdown": "^2.0.1",
+    "mdast-util-gfm": "^3.0.0",
+    "mdast-util-to-markdown": "^2.1.0",
+    "micromark-extension-gfm": "^3.0.0"
+  },
   "packageManager": "pnpm@9.15.3"
 }
