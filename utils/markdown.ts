@@ -62,7 +62,7 @@ export function resolveMarkdownRelativeLinks(
           },
         );
 
-        node.value = toHtml(htmlTree);
+        node.value = toHtml(htmlTree, { closeSelfClosing: true });
       }
     },
   );

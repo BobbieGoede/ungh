@@ -39,7 +39,7 @@ describe("resolveMarkdownRelativeLinks", () => {
     );
 
     expect(res).toMatchInlineSnapshot(
-      `"<img src="https://raw.githubusercontent.com/owner/repo/main/assets/my-image.jpg">"`,
+      `"<img src="https://raw.githubusercontent.com/owner/repo/main/assets/my-image.jpg" />"`,
     );
   });
 });
